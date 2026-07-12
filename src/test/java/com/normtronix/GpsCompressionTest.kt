@@ -103,15 +103,17 @@ GpsCompressionTest {
         println("Expected points after filtering: ${expectedPoints.size}")
         assertEquals(expectedPoints.size, reconstructedData.size, "Should reconstruct correct number of points")
         
-        // Verify each reconstructed point matches the expected point within racing precision
-        // 5e-5 degrees = ~18 feet latitude, ~14 feet longitude at racing latitudes (40-45°)
-        // This accounts for floating-point precision accumulation in delta compression over multiple points
+        // Verify each reconstructed point matches the expected point within racing precision.
+        // With error-feedback quantization at COORD_SCALE = 1e6, the coordinate error is
+        // bounded to a single quantization step (<= 5e-7 degrees, ~0.2 ft) and does NOT
+        // accumulate/drift across the sector regardless of point count.
+        val coordTolerance = 1.0 / GpsConstants.COORD_SCALE  // ~0.36 ft, comfortably above the 0.5-step bound
         for (i in expectedPoints.indices) {
             val expected = expectedPoints[i]
             val actual = reconstructedData[i]
-            
-            assertEquals(expected.latitude, actual.latitude, 0.00005, "Point $i latitude should match within racing precision (~18 feet)")
-            assertEquals(expected.longitude, actual.longitude, 0.00005, "Point $i longitude should match within racing precision (~14 feet)")
+
+            assertEquals(expected.latitude, actual.latitude, coordTolerance, "Point $i latitude should match within ~1 quantization step")
+            assertEquals(expected.longitude, actual.longitude, coordTolerance, "Point $i longitude should match within ~1 quantization step")
             assertEquals(expected.speedMph, actual.speedMph, "Point $i speed should match exactly")
             assertEquals(expected.heading, actual.heading, 0.001f, "Point $i heading should match exactly")
             assertEquals(expected.timestamp, actual.timestamp, "Point $i timestamp should match exactly")

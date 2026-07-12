@@ -27,7 +27,7 @@ compress-gps is specifically designed for **endurance racing telemetry** where m
 | **Space Savings**     | 93%+ on real racing data           |
 | **Memory Usage**      | 12MB for 10Hz GPS, 3-hour sessions |
 | **Upload Size**       | 9KB per hour of data captured      |
-| **GPS Precision**     | ~3.6 feet (1e-5 degrees)           |
+| **GPS Precision**     | ~0.36 ft / 4.4" (1e-6°), drift-free |
 | **Heading Precision** | 0.1 degrees                        |
 
 ## Quick Start

@@ -9,6 +9,11 @@ object GpsConstants {
     const val FEET_PER_DEGREE_LATITUDE = 364000.0  // Approximately 111 km
     const val DISTANCE_THRESHOLD_FEET = 6.0         // 6 feet minimum distance
     const val DISTANCE_THRESHOLD_DEGREES = DISTANCE_THRESHOLD_FEET / FEET_PER_DEGREE_LATITUDE  // ≈ 0.000017
+
+    // Coordinate delta quantization. Deltas are stored as integer units of
+    // (1 / COORD_SCALE) degrees. 1e6 => ~0.36ft (~4.4") grid, matched to RTK-grade
+    // sensors. Encode and decode MUST use this same value.
+    const val COORD_SCALE = 1e6
     
     // Racing dynamics constants for low-performance cars (200hp, 3000lb, street tires)
     const val MAX_BRAKING_DECEL_G = 0.8  // Street tire limit for 3000lb car
@@ -37,8 +42,8 @@ data class GpsDelta(
     val timeDelta: Int,
     val speedDelta: Int,
     val headingDelta: Int,  // In 0.1 degree units
-    val latDelta: Int,      // In 1e-5 degree units (~3.6 feet precision)
-    val lonDelta: Int       // In 1e-5 degree units (~3.6 feet precision)
+    val latDelta: Int,      // In 1/COORD_SCALE degree units (~0.36 ft / 4.4" precision)
+    val lonDelta: Int       // In 1/COORD_SCALE degree units (~0.36 ft / 4.4" precision)
 )
 
 // Racing zone classification for adaptive sampling
@@ -229,18 +234,28 @@ class GpsCompressedStream {
             val startPoint = sampledPoints.first()
             val deltas = mutableListOf<GpsDelta>()
             var lastPoint = startPoint
-            
+            // Error-feedback quantization: lat/lon deltas are measured against the
+            // *reconstructed* previous position (what the decoder will actually
+            // rebuild), not the original point. This bounds coordinate error to a
+            // single quantization step forever instead of letting rounding error
+            // random-walk (drift) across the sector. The decoder is unchanged.
+            var reconLat = startPoint.latitude
+            var reconLon = startPoint.longitude
+
             // Apply delta compression to sampled points
             for (i in 1 until sampledPoints.size) {
                 val point = sampledPoints[i]
-                
+
                 // Store deltas for all fields
                 val timeDelta = (point.timestamp - lastPoint.timestamp).toInt()
                 val speedDelta = point.speedMph - lastPoint.speedMph
                 val headingDelta = ((point.heading - lastPoint.heading) * 10).toInt()
-                val latDelta = ((point.latitude - lastPoint.latitude) * 1e5).toInt()
-                val lonDelta = ((point.longitude - lastPoint.longitude) * 1e5).toInt()
-                
+                val latDelta = Math.round((point.latitude - reconLat) * GpsConstants.COORD_SCALE).toInt()
+                val lonDelta = Math.round((point.longitude - reconLon) * GpsConstants.COORD_SCALE).toInt()
+                // Advance the reconstructed position exactly as the decoder will.
+                reconLat += latDelta / GpsConstants.COORD_SCALE
+                reconLon += lonDelta / GpsConstants.COORD_SCALE
+
                 deltas.add(GpsDelta(timeDelta, speedDelta, headingDelta, latDelta, lonDelta))
                 lastPoint = point
             }
@@ -369,8 +384,8 @@ class GpsCompressedStream {
                 val headingDelta = buffer.readVariableLength()
                 val timeDelta = buffer.readUnsignedVariableLength()
 
-                val lat = currentPoint.latitude + latDelta / 1e5
-                val lon = currentPoint.longitude + lonDelta / 1e5
+                val lat = currentPoint.latitude + latDelta / GpsConstants.COORD_SCALE
+                val lon = currentPoint.longitude + lonDelta / GpsConstants.COORD_SCALE
                 val speed = currentPoint.speedMph + speedDelta
                 val heading = currentPoint.heading + headingDelta / 10.0f
                 val timestamp = currentPoint.timestamp + timeDelta
