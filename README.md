@@ -4,7 +4,7 @@ A high-performance GPS telemetry compression library designed for racing applica
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/sprintf/compress-gps)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
-[![Kotlin](https://img.shields.io/badge/kotlin-1.9.10-purple.svg)](https://kotlinlang.org/)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.4.20-purple.svg)](https://kotlinlang.org/)
 [![Java](https://img.shields.io/badge/java-17+-orange.svg)](https://openjdk.org/)
 
 ## Overview
@@ -34,12 +34,23 @@ compress-gps is specifically designed for **endurance racing telemetry** where m
 
 ### Installation
 
-Add to your `build.gradle.kts`:
+**Android / JVM** - add to your `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.normtronix:compress-gps:1.0.4")
+    implementation("com.normtronix:compress-gps:1.1.0")
 }
+```
+
+**iOS** (iOS 18+) - add the Swift package `https://github.com/sprintf/compress-gps.git` in Xcode, then:
+
+```swift
+import CompressGps
+
+let stream = GpsCompressedStream()
+stream.addPoint(point: GpsData(latitude: 40.23456, longitude: -74.54321, speedMph: 85,
+                               heading: 45.5, timestamp: 1_700_000_000_000, lapNumber: 3))
+let upload: Data = stream.toData()   // same bytes as toBinary() on Android
 ```
 
 ### Basic Usage
@@ -111,16 +122,16 @@ The library includes comprehensive testing with real racing data:
 
 ```bash
 # Run full test suite
-./gradlew test
+./gradlew jvmTest
 
 # Test compression performance
-./gradlew test --tests "*testCompressionPerformance*"
+./gradlew jvmTest --tests "*testCompressionPerformance*"
 
 # Analyze racing dynamics
-./gradlew test --tests "*testRacingDynamicsAnalysis*"
+./gradlew jvmTest --tests "*testRacingDynamicsAnalysis*"
 
 # Memory usage analysis
-./gradlew test --tests "*testMemoryUsageCalculation*"
+./gradlew jvmTest --tests "*testMemoryUsageCalculation*"
 ```
 
 ### Real-World Test Results
@@ -184,7 +195,7 @@ We welcome contributions!
 git clone https://github.com/sprintf/compress-gps.git
 cd compress-gps
 ./gradlew build
-./gradlew test
+./gradlew jvmTest
 ```
 
 ## License

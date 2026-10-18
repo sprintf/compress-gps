@@ -1,8 +1,7 @@
 package com.normtronix
 
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.math.abs
+import kotlin.math.roundToLong
 
 // GPS distance constants
 object GpsConstants {
@@ -224,7 +223,7 @@ class GpsCompressedStream {
     private fun buildLapChunks(): List<LapChunk> {
         val chunks = mutableListOf<LapChunk>()
         
-        for ((lapNumber, lapPoints) in lapChunks.toSortedMap()) {
+        for ((lapNumber, lapPoints) in lapChunks.entries.sortedBy { it.key }) {
             if (lapPoints.isEmpty()) continue
             
             // Apply adaptive sampling first
@@ -250,8 +249,8 @@ class GpsCompressedStream {
                 val timeDelta = (point.timestamp - lastPoint.timestamp).toInt()
                 val speedDelta = point.speedMph - lastPoint.speedMph
                 val headingDelta = ((point.heading - lastPoint.heading) * 10).toInt()
-                val latDelta = Math.round((point.latitude - reconLat) * GpsConstants.COORD_SCALE).toInt()
-                val lonDelta = Math.round((point.longitude - reconLon) * GpsConstants.COORD_SCALE).toInt()
+                val latDelta = roundHalfUp((point.latitude - reconLat) * GpsConstants.COORD_SCALE).toInt()
+                val lonDelta = roundHalfUp((point.longitude - reconLon) * GpsConstants.COORD_SCALE).toInt()
                 // Advance the reconstructed position exactly as the decoder will.
                 reconLat += latDelta / GpsConstants.COORD_SCALE
                 reconLon += lonDelta / GpsConstants.COORD_SCALE
@@ -271,7 +270,7 @@ class GpsCompressedStream {
         val buffer = mutableListOf<Byte>()
         
         // Simplified header: magic number + version + number of chunks
-        buffer.addAll("GPSC".toByteArray().toList()) // Magic number (4 bytes)
+        buffer.addAll("GPSC".encodeToByteArray().toList()) // Magic number (4 bytes)
         buffer.addAll(1.toBinaryBytes()) // Version (4 bytes) 
         buffer.addAll(chunks.size.toBinaryBytes()) // Number of chunks (4 bytes)
         
@@ -318,13 +317,13 @@ class GpsCompressedStream {
     
     companion object {
         fun fromBinary(binaryData: ByteArray): List<GpsData> {
-            val buffer = ByteBuffer.wrap(binaryData).order(ByteOrder.BIG_ENDIAN)
+            val buffer = ByteReader(binaryData)
             val allPoints = mutableListOf<GpsData>()
             
             // Read file header
             val magic = ByteArray(4)
             buffer.get(magic)
-            if (String(magic) != "GPSC") {
+            if (magic.decodeToString() != "GPSC") {
                 throw IllegalArgumentException("Invalid file format")
             }
             
@@ -359,7 +358,7 @@ class GpsCompressedStream {
         }
         
         private fun parseChunk(chunkData: ByteArray): List<GpsData> {
-            val buffer = ByteBuffer.wrap(chunkData).order(ByteOrder.BIG_ENDIAN)
+            val buffer = ByteReader(chunkData)
             val points = mutableListOf<GpsData>()
             
             // Read chunk header
@@ -400,29 +399,50 @@ class GpsCompressedStream {
     
 }
 
-// Extension functions for binary serialization
-fun Double.toBinaryBytes(): List<Byte> {
-    val buffer = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
-    buffer.putDouble(this)
-    return buffer.array().toList()
-}
+// Same rounding as java.lang.Math.round: ties go towards positive infinity and
+// NaN becomes 0. kotlin.math.round would round ties to even, changing the encoding.
+internal fun roundHalfUp(value: Double): Long = if (value.isNaN()) 0L else value.roundToLong()
 
-fun Float.toBinaryBytes(): List<Byte> {
-    val buffer = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN)
-    buffer.putFloat(this)
-    return buffer.array().toList()
-}
+// Extension functions for binary serialization (big-endian)
+fun Double.toBinaryBytes(): List<Byte> = toRawBits().toBinaryBytes()
 
-fun Int.toBinaryBytes(): List<Byte> {
-    val buffer = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN)
-    buffer.putInt(this)
-    return buffer.array().toList()
-}
+fun Float.toBinaryBytes(): List<Byte> = toRawBits().toBinaryBytes()
 
-fun Long.toBinaryBytes(): List<Byte> {
-    val buffer = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
-    buffer.putLong(this)
-    return buffer.array().toList()
+fun Int.toBinaryBytes(): List<Byte> = (3 downTo 0).map { (this shr (it * 8)).toByte() }
+
+fun Long.toBinaryBytes(): List<Byte> = (7 downTo 0).map { (this shr (it * 8)).toByte() }
+
+// Minimal big-endian reader over a byte array; throws IndexOutOfBoundsException
+// when it runs off the end, which fromBinary treats as a corrupted chunk.
+internal class ByteReader(private val bytes: ByteArray) {
+    private var position = 0
+
+    fun get(): Byte {
+        if (position >= bytes.size) throw IndexOutOfBoundsException("Read past end of data")
+        return bytes[position++]
+    }
+
+    fun get(destination: ByteArray) {
+        if (position + destination.size > bytes.size) throw IndexOutOfBoundsException("Read past end of data")
+        bytes.copyInto(destination, 0, position, position + destination.size)
+        position += destination.size
+    }
+
+    fun getInt(): Int {
+        var result = 0
+        repeat(4) { result = (result shl 8) or (get().toInt() and 0xFF) }
+        return result
+    }
+
+    fun getLong(): Long {
+        var result = 0L
+        repeat(8) { result = (result shl 8) or (get().toLong() and 0xFF) }
+        return result
+    }
+
+    fun getFloat(): Float = Float.fromBits(getInt())
+
+    fun getDouble(): Double = Double.fromBits(getLong())
 }
 
 // Variable-length encoding for signed integers (zigzag encoding)
@@ -454,15 +474,15 @@ fun Int.toUnsignedVariableLength(): ByteArray {
     return result.toByteArray()
 }
 
-// Read variable-length integer from ByteBuffer with zigzag decoding
-fun ByteBuffer.readVariableLength(): Int {
+// Read variable-length integer with zigzag decoding
+internal fun ByteReader.readVariableLength(): Int {
     val unsignedValue = this.readUnsignedVariableLength()
     // ZigZag decode to handle negative values
     return (unsignedValue ushr 1) xor (-(unsignedValue and 1))
 }
 
-// Read unsigned variable-length integer from ByteBuffer (no zigzag decoding)
-fun ByteBuffer.readUnsignedVariableLength(): Int {
+// Read unsigned variable-length integer (no zigzag decoding)
+internal fun ByteReader.readUnsignedVariableLength(): Int {
     var result = 0
     var shift = 0
     
