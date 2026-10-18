@@ -16,8 +16,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "CompressGps",
-            url: "https://github.com/sprintf/compress-gps/releases/download/v0.0.0/CompressGps.xcframework.zip",
-            checksum: "0000000000000000000000000000000000000000000000000000000000000000"
+            url: "https://github.com/sprintf/compress-gps/releases/download/v1.2.0/CompressGps.xcframework.zip",
+            checksum: "c833c98ceebf6aa786b6d896a0301d9703a6a7da6c4f58af075ac5a17a89f3ea"
         ),
     ]
 )
