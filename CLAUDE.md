@@ -47,10 +47,13 @@ iOS and Android apps must produce identical bytes.
 
 ### Releasing
 
-Run the **Release** workflow from the GitHub Actions tab with a version like `1.1.0`. It tests,
-publishes to GitHub Packages, builds and attaches `CompressGps.xcframework.zip`, writes its url
-and checksum into `Package.swift`, commits that to `main` and tags it `v<version>` (the tag
-format SwiftPM understands).
+Publish a release from the GitHub Releases page with a tag like `v1.2.0` (the `v` plus three
+numbers is the tag format SwiftPM understands). The **Release** workflow then tests, publishes
+to GitHub Packages, attaches `CompressGps.xcframework.zip` and the JVM jars to the release, and
+commits the zip's url and checksum into `Package.swift` on top of the tagged commit, moving the
+tag to that commit. `main` keeps placeholder values, so only tagged versions work from SwiftPM.
+
+If a run fails, fix the cause and start **Release** from the Actions tab with the same tag.
 
 ## Architecture Overview
 
