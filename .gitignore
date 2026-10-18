@@ -40,3 +40,9 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+### Kotlin ###
+.kotlin/
+
+### Swift Package Manager ###
+.build/
+.swiftpm/
