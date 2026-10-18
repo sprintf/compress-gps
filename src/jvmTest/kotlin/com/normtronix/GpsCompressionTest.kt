@@ -619,6 +619,26 @@ GpsCompressionTest {
         assertTrue(compressedSize < estimatedUncompressedSize, "Compressed size should be smaller than estimated uncompressed size")
     }
     
+    // Pins the exact encoded bytes for the real track fixtures, so the binary
+    // format can't silently change (e.g. a rounding difference between platforms).
+    @Test
+    fun testBinaryFormatIsStable() {
+        val expected = mapOf(
+            "gps-2022-03-12.csv" to "157fddcee30eb3a6d7c78dc4c8b703316134b397ce39d06b3d5980c2d1de61e1",
+            "gps-2023-05-27.csv" to "d2ab50ba9387ba9b1eccccf0885933cceaf1bbcb777620cce124abc89ddd8838",
+        )
+        for ((filename, expectedHash) in expected) {
+            val content = this::class.java.classLoader.getResourceAsStream(filename)!!
+                .bufferedReader().use { it.readText() }
+            val stream = GpsCompressedStream()
+            parseGpsContent(content).forEach { stream.addPoint(it) }
+            val hash = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(stream.toBinary()).joinToString("") { "%02x".format(it) }
+            println("$filename sha256=$hash")
+            assertEquals(expectedHash, hash, "Encoded output for $filename changed")
+        }
+    }
+
     private fun parseGpsContent(content: String): List<GpsData> {
         val gpsData = mutableListOf<GpsData>()
         

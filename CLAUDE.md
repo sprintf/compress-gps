@@ -19,16 +19,38 @@ This project uses Gradle with Kotlin DSL for build configuration.
 ./gradlew build
 
 # Run tests (comprehensive test suite)
-./gradlew test
+./gradlew jvmTest
 
 # Run specific test categories
-./gradlew test --tests "*testCompressionPerformance*"
-./gradlew test --tests "*testAdaptiveSampling*"
-./gradlew test --tests "*testRacingDynamicsAnalysis*"
+./gradlew jvmTest --tests "*testCompressionPerformance*"
+./gradlew jvmTest --tests "*testAdaptiveSampling*"
+./gradlew jvmTest --tests "*testRacingDynamicsAnalysis*"
 
 # Clean build artifacts
 ./gradlew clean
 ```
+
+### Kotlin Multiplatform
+
+The library is Kotlin Multiplatform: shared code lives in `src/commonMain`, the iOS-only
+`toData()` helper in `src/iosMain`, and the tests (JVM only, they read the CSV fixtures as
+resources) in `src/jvmTest`. Code in `commonMain` must not use `java.*` APIs.
+
+```bash
+# Build the iOS XCFramework (macOS only) into build/XCFrameworks/release/
+./gradlew assembleCompressGpsReleaseXCFramework
+```
+
+`testBinaryFormatIsStable` pins the SHA-256 of the encoded fixture files. If it fails, the
+binary format changed - only update the hashes when that change is intended, since the
+iOS and Android apps must produce identical bytes.
+
+### Releasing
+
+Run the **Release** workflow from the GitHub Actions tab with a version like `1.1.0`. It tests,
+publishes to GitHub Packages, builds and attaches `CompressGps.xcframework.zip`, writes its url
+and checksum into `Package.swift`, commits that to `main` and tags it `v<version>` (the tag
+format SwiftPM understands).
 
 ## Architecture Overview
 

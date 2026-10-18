@@ -1,7 +1,8 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
+
 plugins {
-    id("java")
-    `java-library`
-    kotlin("jvm") version "1.9.10"
+    kotlin("multiplatform") version "2.4.20"
     `maven-publish`
 }
 
@@ -12,30 +13,37 @@ repositories {
     mavenCentral()
 }
 
-dependencies {
-    implementation(kotlin("stdlib"))
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation(kotlin("test"))
-}
+kotlin {
+    jvm {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
 
-tasks.test {
-    useJUnitPlatform()
-}
+    // iOS framework, packaged as CompressGps.xcframework for Swift Package Manager
+    val xcf = XCFramework("CompressGps")
+    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
+        target.binaries.framework {
+            baseName = "CompressGps"
+            xcf.add(this)
+        }
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions {
-        jvmTarget = "17"
+    sourceSets {
+        jvmTest.dependencies {
+            implementation(kotlin("test-junit5"))
+            implementation(project.dependencies.platform("org.junit:junit-bom:5.10.0"))
+            implementation("org.junit.jupiter:junit-jupiter")
+        }
     }
 }
 
+tasks.named<Test>("jvmTest") {
+    useJUnitPlatform()
+}
+
 // Configure JAR manifest
-tasks.jar {
+tasks.named<Jar>("jvmJar") {
     manifest {
         attributes(
             "Implementation-Title" to "compress-gps",
@@ -45,17 +53,12 @@ tasks.jar {
     }
 }
 
-// Configure source JAR
-java {
-    withSourcesJar()
-}
-
 // Configure publishing
 publishing {
     publications {
-        create<MavenPublication>("maven") {
-            from(components["java"])
-            
+        // The multiplatform plugin creates the publications (compress-gps plus
+        // compress-gps-jvm etc.); this just fills in their POMs.
+        withType<MavenPublication>().configureEach {
             pom {
                 name.set("compress-gps")
                 description.set("High-performance GPS telemetry compression library for racing applications")
